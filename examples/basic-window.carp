@@ -1,0 +1,29 @@
+; Copyright (c) 2021 Timothée Dévé (@timdeve)
+; What follow is the original C example copyright notice:
+;
+; This example has been created using raylib 1.0 (www.raylib.com)
+; raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
+;
+; Copyright (c) 2013-2016 Ramon Santamaria (@raysan5); Setup raylib library before loading the carp bindings
+
+; Setup raylib library before loading the carp bindings
+(system-include "raylib.h")
+(mac-only
+  (add-pkg "raylib"))
+(linux-only
+  (add-lib "-lraylib"))
+
+(load "../raylib-carp.carp")
+
+(use Raylib)
+
+(defn-do main []
+  (init-window 800 450 "Hello")
+  (while (not (window-should-close))
+    (do
+      (begin-drawing)
+      (clear-background Color.ray-white)
+      (draw-text "Congrats! You created your first window!" 190 200 20 Color.gray)
+      (end-drawing)))
+  (close-window))
+

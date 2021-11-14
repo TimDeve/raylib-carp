@@ -1,0 +1,6 @@
+(load-once "structs.carp")
+
+(defmodule Raylib
+  (register draw-circle-vec (Fn [Vector2 Float Color] ()) "DrawCircleV")
+  (register draw-rectangle-rect (Fn [Rectangle Color] ()) "DrawRectangleRec"))
+

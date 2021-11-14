@@ -1,0 +1,250 @@
+; Copyright (c) 2021 Timothée Dévé (@timdeve)
+; What follow is the original C example copyright notice:
+;
+; This example has been created using raylib 2.5 (www.raylib.com)
+; raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
+;
+; Example contributed by arvyy (@arvyy) and reviewed by Ramon Santamaria (@raysan5)
+;
+; Copyright (c) 2019 arvyy (@arvyy)
+
+; Setup Raylib C library before loading the carp bindings
+(system-include "raylib.h")
+(system-include "raymath.h")
+(mac-only
+  (add-pkg "raylib"))
+(linux-only
+  (add-lib "-lraylib"))
+
+(load "../raylib-carp.carp")
+(load "../raymath.carp")
+
+(use Raylib)
+(use Color)
+(use RaylibKey)
+
+(defmacro and* [:rest forms]
+  (build-vararg 'and forms))
+
+(defmacro with* [:rest forms]
+  (build-vararg 'with forms))
+
+(defn gravity [] 400f)
+(defn jump-speed [] 350f)
+(defn horizontal-speed [] 200f)
+
+(defn screen-width [] 800f)
+(defn screen-height [] 450f)
+
+(defn half-swidth [] (/ (screen-width) 2.0f))
+(defn half-sheight [] (/ (screen-height) 2.0f))
+
+(deftype Player [pos Vector2 speed Float can-jump Bool])
+(deftype EnvItem [rect Rectangle color Color])
+
+(sig player-colliding? (Fn [(Ref EnvItem) (Ref Player) Float] Bool))
+(defn player-colliding? [env-item player delta]
+  (with* Rectangle Player EnvItem Vector2
+    (let [ppos (pos player)]
+      (and* (<= (x (rect env-item)) (x ppos))
+            (>= (+ @(x (rect env-item)) @(width (rect env-item))) @(x ppos))
+            (>= (y (rect env-item)) (y ppos))
+            (<  @(y (rect env-item)) (+ @(y ppos) (* @(speed player) delta)))))))
+
+(defn-do update-player [player env-items delta]
+  (when (is-key-down? left)
+        (let [pos (Player.pos player)
+              player-x (Vector2.x pos)]
+          (Vector2.set-x! pos (- @player-x (* (horizontal-speed) @delta)))))
+  (when (is-key-down? right)
+        (let [pos (Player.pos player)
+              player-x (Vector2.x pos)]
+          (Vector2.set-x! pos (+ @player-x (* (horizontal-speed) @delta)))))
+  (when (and (is-key-down? space) @(Player.can-jump player))
+        (do
+          (Player.set-speed! player (* (jump-speed) -1f))
+          (Player.set-can-jump! player false)))
+
+  (let-do [has-hit-obstacle false]
+    (StaticArray.foreach [item env-items]
+      (when (player-colliding? item player @delta)
+            (do
+              (set! has-hit-obstacle true)
+              (Player.set-speed! player 0f)
+              (Vector2.set-y! (Player.pos player) @(Rectangle.y (EnvItem.rect item))))))
+
+    (if has-hit-obstacle
+        (Player.set-can-jump! player true)
+        (let-do [pos (Player.pos player)
+                 speed (Player.speed player)]
+          (Vector2.set-y! pos (+ @(Vector2.y pos) (* @speed @delta)))
+          (Player.set-speed! player (+ @speed (* (gravity) @delta)))
+          (Player.set-can-jump! player false)))))
+
+(defn update-camera-center-description [] "Follow player center")
+(sig update-camera-center (Fn [(Ref Camera2D) (Ref Player) (Ref (StaticArray EnvItem)) Float] ()))
+(defn-do update-camera-center [camera player env-items delta]
+  (Camera2D.set-offset! camera (Vector2.init (half-swidth) (half-sheight)))
+  (Camera2D.set-target! camera @(Player.pos player)))
+
+(defn update-camera-center-inside-map-description [] "Follow player center, but clamp to map edges")
+(sig update-camera-center-inside-map (Fn [(Ref Camera2D) (Ref Player) (Ref (StaticArray EnvItem)) Float] ()))
+(defn update-camera-center-inside-map [camera player env-items delta]
+  (with* Camera2D Player Vector2 EnvItem Rectangle
+    (let-do [min-x 1000f min-y 1000f max-x -1000f max-y -1000f]
+      (set-target! camera @(pos player))
+      (set-offset! camera (init (half-swidth) (half-sheight)))
+      (StaticArray.foreach [item env-items]
+        (do (set! min-x (min @(x (rect item)) min-x))
+            (set! max-x (max (+ @(x (rect item)) @(width (rect item))) max-x))
+            (set! min-y (min @(y (rect item)) max-y))
+            (set! max-y (max (+ @(y (rect item)) @(height (rect item))) max-y))))
+
+      (let-do [smax &(get-world-to-screen-2d (Vector2 max-x max-y) @camera)
+               smin &(get-world-to-screen-2d (Vector2 min-x min-y) @camera)]
+        (when (< @(x smax) (screen-width))
+              (set-x! (offset camera) (- (screen-width) (- @(x smax) (half-swidth)))))
+        (when (< @(y smax) (screen-height))
+              (set-y! (offset camera) (- (screen-height) (- @(y smax) (half-sheight)))))
+        (when (> @(x smin) 0f)
+              (set-x! (offset camera) (- (half-swidth) @(x smin))))
+        (when (< @(y smin) 0f)
+              (set-y! (offset camera) (- (half-sheight) @(y smin))))))))
+
+(defn update-camera-center-smooth-follow-description [] "Follow player center; smoothed")
+(sig update-camera-center-smooth-follow (Fn [(Ref Camera2D) (Ref Player) (Ref (StaticArray EnvItem)) Float] ()))
+(defn update-camera-center-smooth-follow [camera player env-items delta]
+  (with* Camera2D Player Vector2
+    (let-do [min-speed 30f
+             min-effect-length 10f
+             fraction-speed 0.8f
+             diff (Vector2.- @(pos player) @(target camera))
+             len (length @&diff)]
+      (set-offset! camera (Vector2 (half-swidth) (half-sheight)))
+      (when (> &len &min-effect-length)
+        (let [speed (max (* fraction-speed len) min-speed)]
+          (set-target! camera (Vector2.+ @(target camera)
+                                         (scale diff (/ (* speed delta) len)))))))))
+
+(def even-out-camera-speed 700f)
+(def even-out-camera-evening-out false)
+(def even-out-camera-target 0f)
+
+(defn update-camera-even-out-landing-description []
+  "Follow player center horizontally; updateplayer center vertically after landing")
+(sig update-camera-even-out-landing (Fn [(Ref Camera2D) (Ref Player) (Ref (StaticArray EnvItem)) Float] ()))
+(defn-do update-camera-even-out-landing [camera player env-items delta]
+  (set-offset! camera (Vector2 (half-swidth) (half-sheight)))
+  (set-x! (target camera) @(x (pos player)))
+  (if even-out-camera-evening-out
+    (if (> &even-out-camera-target (y (target camera)))
+      (let-do [target-y (y (target camera))]
+        (set-y! (target camera) (+ @target-y (* @&even-out-camera-speed delta)))
+        (when (> target-y &even-out-camera-speed)
+          (do (set-y! (target camera) @&even-out-camera-target)
+              (set! even-out-camera-evening-out false))))
+      (let-do [target-y (y (target camera))]
+        (set-y! (target camera) (- @target-y (* @&even-out-camera-speed delta)))
+        (when (< target-y &even-out-camera-target)
+          (do (set-y! (target camera) @&even-out-camera-target)
+              (set! even-out-camera-evening-out false)))))
+    (when (and* @(can-jump player)
+                (= @(speed player) 0f)
+                (not (= @(y (pos player)) @(y (target camera)))))
+      (do (set! even-out-camera-evening-out true)
+          (set! even-out-camera-target @(y (pos player)))))))
+
+(defn update-camera-player-bound-push-description [] "Player push camera on getting too close to screen edge")
+(sig update-camera-player-bound-push (Fn [(Ref Camera2D) (Ref Player) (Ref (StaticArray EnvItem)) Float] ()))
+(defn update-camera-player-bound-push [camera player env-items delta]
+  (with* Camera2D Player Vector2
+    (let-do [bbox-y &0.2f bbox-x &0.2f
+             bbox-world-min (get-screen-to-world-2d
+                              (Vector2 (* (* (- 1f @bbox-x) 0.5f) (screen-width))
+                                       (* (* (- 1f @bbox-y) 0.5f) (screen-height)))
+                              @camera)
+             bbox-world-max (get-screen-to-world-2d
+                              (Vector2 (* (* (+ 1f @bbox-x) 0.5f) (screen-width))
+                                       (* (* (+ 1f @bbox-y) 0.5f) (screen-height)))
+                              @camera)]
+     (set-offset! camera (Vector2 (* (* (- 1f @bbox-x) 0.5f) (screen-width))
+                                  (* (* (- 1f @bbox-y) 0.5f) (screen-height))))
+     (when (< (x (pos player)) (x &bbox-world-min))
+       (set-x! (target camera) @(x (pos player))))
+     (when (< (y (pos player)) (y &bbox-world-min))
+       (set-y! (target camera) @(y (pos player))))
+     (when (> (x (pos player)) (x &bbox-world-max))
+       (set-x! (target camera) (+ @(x &bbox-world-min) (- @(x (pos player)) @(x &bbox-world-max)))))
+     (when (> (y (pos player)) (y &bbox-world-max))
+       (set-y! (target camera) (+ @(y &bbox-world-min) (- @(y (pos player)) @(y &bbox-world-max))))))))
+
+(defn main []
+  (let-do [player (Player (Vector2 400f 280f) 0f false)
+           env-items $[(EnvItem (Rectangle.init   0f   0f 1000f 400f) light-gray)
+                       (EnvItem (Rectangle.init   0f 400f 1000f 200f) gray)
+                       (EnvItem (Rectangle.init 300f 200f  400f  10f)  gray)
+                       (EnvItem (Rectangle.init 250f 300f  100f  10f)  gray)
+                       (EnvItem (Rectangle.init 650f 300f  100f  10f)  gray)]
+           camera (=> (zero)
+                      (Camera2D.set-target @(Player.pos &player))
+                      (Camera2D.set-offset (Vector2 (half-swidth)
+                                                    (half-sheight))))
+           camera-fns          $[update-camera-center
+                                 update-camera-center-inside-map
+                                 update-camera-center-smooth-follow
+                                 update-camera-even-out-landing
+                                 update-camera-player-bound-push]
+           camera-descriptions $[update-camera-center-description
+                                 update-camera-center-inside-map-description
+                                 update-camera-center-smooth-follow-description
+                                 update-camera-even-out-landing-description
+                                 update-camera-player-bound-push-description]
+           camera-index 0]
+    (init-window (to-int (screen-width)) (to-int (screen-height)) "raylib [core] example - 2d camera")
+    (set-target-fps 60)
+    (while (not (window-should-close))
+      (let-do [delta-time (get-frame-time)]
+        (update-player &player env-items &delta-time)
+        (let [current-cam (StaticArray.unsafe-nth camera-fns camera-index)]
+          (~current-cam &camera &player env-items @&delta-time))
+
+        (let-do [cam-zoom (Camera2D.zoom &camera)]
+          (Camera2D.set-zoom! &camera (+ @cam-zoom
+                                         (* 0.05f (get-mouse-wheel-move))))
+          (cond (> @cam-zoom 3.0f)  (Camera2D.set-zoom! &camera 3.0f)
+                (< @cam-zoom 0.25f) (Camera2D.set-zoom! &camera 0.25f)
+                ()))
+
+        (when (is-key-pressed? letter-r)
+          (do
+            (Camera2D.set-zoom! &camera 1f)
+            (Player.set-pos! &player (Vector2 400f 280f))))
+
+        (when (is-key-pressed? letter-c)
+          (set! camera-index (mod (inc camera-index) (StaticArray.length camera-fns))))
+
+        (begin-drawing)
+        (clear-background light-gray)
+
+        (begin-mode-2d @&camera)
+        (StaticArray.foreach [item env-items]
+          (draw-rectangle-rect @(EnvItem.rect item) @(EnvItem.color item)))
+        (draw-rectangle-rect (Rectangle (- @(Vector2.x (Player.pos &player)) 20f)
+                                        (- @(Vector2.y (Player.pos &player)) 40f)
+                                        40f
+                                        40f)
+                             Color.red)
+        (end-mode-2d)
+
+        (draw-text "Controls:" 20 20 10 black)
+        (draw-text "- Right/Left to move" 40 40 10 dark-gray)
+        (draw-text "- Space to jump" 40 60 10 dark-gray)
+        (draw-text "- Mouse Wheel to Zoom in-out R to reset zoom" 40 80 10 dark-gray)
+        (draw-text "- C to change camera mode" 40 100 10 dark-gray)
+        (draw-text "Current camera mode:" 20 120 10 black)
+        (let [cam-description (~(StaticArray.unsafe-nth camera-descriptions camera-index))]
+          (draw-text cam-description 40 140 10 dark-gray))
+
+        (end-drawing)))
+    (close-window)))
+

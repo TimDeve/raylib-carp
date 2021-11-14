@@ -1,0 +1,4 @@
+(load "./lib/core.carp")
+(load "./lib/text.carp")
+(load "./lib/shapes.carp")
+

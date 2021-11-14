@@ -1,0 +1,14 @@
+(load-once "./lib/structs.carp")
+
+(defmodule Vector2
+  (register one (Fn [] Vector2) "Vector2One")
+
+  (register + (Fn [Vector2 Vector2] Vector2) "Vector2Add")
+  (implements + Vector2.+)
+
+  (register - (Fn [Vector2 Vector2] Vector2) "Vector2Subtract")
+  (implements - Vector2.-)
+
+  (register length (Fn [Vector2] Float) "Vector2Length")
+  (register scale (Fn [Vector2 Float] Vector2) "Vector2Scale"))
+

@@ -1,0 +1,6 @@
+(load-once "structs.carp")
+
+(defmodule Raylib
+  (register draw-text-ptr (Fn [(Ptr CChar) Int Int Int Color] ()) "DrawText")
+  (defn draw-text [text x y font-size color]
+   (draw-text-ptr (cstr text) x y font-size color)))

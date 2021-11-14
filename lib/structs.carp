@@ -1,0 +1,76 @@
+(register-type Color [r Uint8 g Uint8 b Uint8 a Uint8])
+(defmodule Color
+  (register black Color "BLACK")
+  (register white Color "WHITE")
+  (register ray-white Color "RAYWHITE")
+  (register gray Color "GRAY")
+  (register light-gray Color "LIGHTGRAY")
+  (register dark-gray Color "DARKGRAY")
+  (register maroon Color "MAROON")
+  (register red Color "RED")
+  (deftemplate copy (Fn [(Ref Color)] Color)
+                    "Color $NAME(Color *v)"
+                    "$DECL {
+                      return *v;
+                    }")
+  (implements copy copy)
+
+  (defn prn-owned [color] (prn &(the Color color)))
+  (implements prn prn-owned))
+
+(register-type Vector2 [x Float y Float])
+(defmodule Vector2
+  (deftemplate copy (Fn [(Ref Vector2)] Vector2)
+                    "Vector2 $NAME(Vector2 *v)"
+                    "$DECL {
+                      return *v;
+                    }")
+  (implements copy copy)
+
+  (defn zero [] (Vector2.init 0f 0f))
+  (implements zero zero)
+
+  (defn prn-owned [vec] (prn &(the Vector2 vec)))
+  (implements prn prn-owned))
+
+(register-type Rectangle [x Float y Float width Float height Float])
+(defmodule Rectangle
+  (deftemplate copy (Fn [(Ref Rectangle)] Rectangle)
+                    "Rectangle $NAME(Rectangle *v)"
+                    "$DECL {
+                      return *v;
+                    }")
+  (implements copy copy)
+
+  (defn zero [] (Rectangle.init 0f 0f 0f 0f))
+  (implements zero zero)
+
+  (defn prn-owned [rec] (prn &(the Rectangle rec)))
+  (implements prn prn-owned))
+
+(register-type Camera2D [offset Vector2 target Vector2 rotation Float zoom Float])
+(defmodule Camera2D
+  (deftemplate copy (Fn [(Ref Camera2D)] Camera2D)
+                    "Camera2D $NAME(Camera2D *v)"
+                    "$DECL {
+                      return *v;
+                    }")
+  (implements copy copy)
+
+  (defn zero [] (Camera2D.init (zero) (zero) 0f 1f))
+  (implements zero zero)
+
+  (defn prn-owned [cam] (prn &(the Camera2D cam)))
+  (implements prn prn-owned))
+
+(register-type RaylibKey "int")
+(defmodule RaylibKey
+  (register no-key RaylibKey "0")
+  (register up RaylibKey "KEY_UP")
+  (register down RaylibKey "KEY_DOWN")
+  (register right RaylibKey "KEY_RIGHT")
+  (register left RaylibKey "KEY_LEFT")
+  (register space RaylibKey "KEY_SPACE")
+  (register letter-r RaylibKey "KEY_R")
+  (register letter-c RaylibKey "KEY_C"))
+

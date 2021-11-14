@@ -1,0 +1,43 @@
+; Copyright (c) 2021 Timothée Dévé (@timdeve)
+; What follow is the original C example copyright notice:
+;
+; This example has been created using raylib 1.0 (www.raylib.com)
+; raylib is licensed under an unmodified zlib/libpng license (View raylib.h for details)
+;
+; Copyright (c) 2014 Ramon Santamaria (@raysan5)
+
+; Setup raylib library before loading the carp bindings
+(system-include "raylib.h")
+(mac-only
+  (add-pkg "raylib"))
+(linux-only
+  (add-lib "-lraylib"))
+
+(load "../raylib-carp.carp")
+
+(use Raylib)
+
+(def screen-width &800)
+(def screen-height &450)
+
+(defn main []
+  (let-do [ball-pos (Vector2.init (/ (from-int @screen-width) 2f) (/ (from-int @screen-height) 2f))]
+    (init-window 800 450 "raylib [core] example - keyboard input")
+    (set-target-fps 60)
+    (while (not (window-should-close))
+      (do
+        (when (is-key-down? RaylibKey.right)
+              (set! ball-pos (Vector2.update-x ball-pos &(fn [x] (+ x 2f)))))
+        (when (is-key-down? RaylibKey.left)
+              (set! ball-pos (Vector2.update-x ball-pos &(fn [x] (- x 2f)))))
+        (when (is-key-down? RaylibKey.up)
+              (set! ball-pos (Vector2.update-y ball-pos &(fn [x] (- x 2f)))))
+        (when (is-key-down? RaylibKey.down)
+              (set! ball-pos (Vector2.update-y ball-pos &(fn [x] (+ x 2f)))))
+        (begin-drawing)
+        (clear-background Color.ray-white)
+        (draw-text "move the ball with arrow keys" 10 10 20 Color.dark-gray)
+        (draw-circle-vec @&ball-pos 50f Color.maroon)
+        (end-drawing)))
+    (close-window)))
+
